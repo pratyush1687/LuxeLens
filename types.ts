@@ -31,6 +31,7 @@ export interface Project {
   timestamp: number;
   jewelryFile: string;
   logoFile: string;
+  jewelrySize?: string;
   analysis: JewelryAnalysis;
   images: GeneratedImage[];
 }

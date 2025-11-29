@@ -10,6 +10,7 @@ const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.API_KEY_SELECTION);
   const [jewelryFile, setJewelryFile] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<string | null>(null);
+  const [jewelrySize, setJewelrySize] = useState<string>('');
   const [analysis, setAnalysis] = useState<JewelryAnalysis | null>(null);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +107,7 @@ const App: React.FC = () => {
       setAppState(AppState.RESULTS); // Move to results view to show progress
 
       // 2. Trigger Generations in parallel
-      generateAllScenarios(jewelryFile, logoFile, analysisResult, initialImages);
+      generateAllScenarios(jewelryFile, logoFile, analysisResult, initialImages, jewelrySize);
 
     } catch (err: any) {
       console.error(err);
@@ -119,7 +120,8 @@ const App: React.FC = () => {
     jFile: string, 
     lFile: string, 
     analysisData: JewelryAnalysis,
-    placeholders: GeneratedImage[]
+    placeholders: GeneratedImage[],
+    sizeStr?: string
   ) => {
     // Process all scenarios in parallel
     // Since RPM limits can be strict for complex image generation, we stagger requests significantly.
@@ -154,7 +156,7 @@ const App: React.FC = () => {
         }
 
         // Generate with new service (2K resolution handled internally)
-        const generatedUrl = await generateJewelryRendition(jFile, lFile, analysisData, prompt);
+        const generatedUrl = await generateJewelryRendition(jFile, lFile, analysisData, prompt, sizeStr);
 
         const updatedItem: GeneratedImage = { ...item, url: generatedUrl, status: 'completed' };
         
@@ -182,6 +184,7 @@ const App: React.FC = () => {
       timestamp: Date.now(),
       jewelryFile: jFile,
       logoFile: lFile,
+      jewelrySize: sizeStr,
       analysis: analysisData,
       images: results
     };
@@ -227,6 +230,7 @@ const App: React.FC = () => {
   const restoreProject = (project: Project) => {
     setJewelryFile(project.jewelryFile);
     setLogoFile(project.logoFile);
+    setJewelrySize(project.jewelrySize || '');
     setAnalysis(project.analysis);
     setGeneratedImages(project.images);
     setAppState(AppState.RESULTS);
@@ -245,6 +249,7 @@ const App: React.FC = () => {
   const reset = () => {
     setAppState(AppState.UPLOAD);
     setJewelryFile(null);
+    setJewelrySize('');
     // Do NOT clear logoFile, keep it persisted
     setGeneratedImages([]);
     setAnalysis(null);
@@ -281,11 +286,17 @@ const App: React.FC = () => {
     );
   }
 
+  // Determine main container classes based on state
+  // If UPLOAD state, we center vertically and restrict height to avoid scroll
+  const mainClass = appState === AppState.UPLOAD 
+    ? "flex-grow flex flex-col justify-center max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full h-[calc(100vh-4rem)]" 
+    : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 w-full flex-grow";
+
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 font-sans">
+    <div className="min-h-screen bg-stone-50 text-stone-900 font-sans flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-stone-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="bg-white border-b border-stone-200 sticky top-0 z-50 h-16 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={reset}>
              <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center text-white shadow-sm">
                <span className="font-serif font-bold text-lg">L</span>
@@ -306,11 +317,11 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+      <main className={mainClass}>
         
         {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-start gap-3 animate-pulse text-sm">
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-start gap-3 animate-pulse text-sm">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <p>{error}</p>
           </div>
@@ -318,41 +329,64 @@ const App: React.FC = () => {
 
         {/* Upload View */}
         {appState === AppState.UPLOAD && (
-          <div className="max-w-3xl mx-auto animate-fade-in">
-            <div className="text-center mb-8 md:mb-10">
-              <h2 className="text-3xl md:text-4xl font-serif font-bold text-stone-900 mb-3">Studio Quality Assets</h2>
-              <p className="text-sm md:text-lg text-stone-600 leading-relaxed max-w-xl mx-auto">
+          <div className="max-w-3xl mx-auto animate-fade-in w-full">
+            <div className="text-center mb-4 md:mb-8">
+              <h2 className="text-2xl md:text-4xl font-serif font-bold text-stone-900 mb-1 md:mb-2">Studio Quality Assets</h2>
+              <p className="text-xs md:text-lg text-stone-600 leading-relaxed max-w-xl mx-auto hidden xs:block">
                 Upload your product photo. We'll utilize Nano Banana Pro to generate professional marketing assets instantly.
               </p>
             </div>
 
-            <div className="bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-stone-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-6 md:mb-8">
-                <FileUpload 
-                  id="jewelry-upload"
-                  label="1. Product Photograph" 
-                  preview={jewelryFile} 
-                  onChange={(_, base64) => setJewelryFile(base64)} 
-                />
-                <FileUpload 
-                  id="logo-upload"
-                  label="2. Brand Logo" 
-                  preview={logoFile} 
-                  onChange={handleLogoChange} 
-                />
+            <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border border-stone-200">
+              {/* Grid Layout: Side-by-side on mobile to save vertical space */}
+              <div className="grid grid-cols-2 gap-3 md:gap-8 mb-4 md:mb-8">
+                <div className="col-span-1">
+                  <FileUpload 
+                    id="jewelry-upload"
+                    label="1. Product" 
+                    preview={jewelryFile} 
+                    onChange={(_, base64) => setJewelryFile(base64)} 
+                  />
+                </div>
+
+                <div className="col-span-1">
+                   <FileUpload 
+                    id="logo-upload"
+                    label="2. Logo" 
+                    preview={logoFile} 
+                    onChange={handleLogoChange} 
+                  />
+                </div>
+                
+                {/* Size Input spans both columns */}
+                <div className="col-span-2">
+                   <div className="flex flex-col gap-1.5 md:gap-2">
+                    <label htmlFor="size-input" className="text-xs md:text-sm font-medium text-stone-700 uppercase tracking-wide">
+                      Approximate Size (Optional)
+                    </label>
+                    <input 
+                      id="size-input"
+                      type="text" 
+                      placeholder="e.g. 2.5 cm, 18 inch chain" 
+                      value={jewelrySize}
+                      onChange={(e) => setJewelrySize(e.target.value)}
+                      className="w-full p-2.5 md:p-3 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all placeholder-stone-400 bg-stone-50"
+                    />
+                  </div>
+                </div>
               </div>
 
               <button
                 onClick={startGeneration}
                 disabled={!jewelryFile || !logoFile}
-                className={`w-full py-3.5 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 ${
+                className={`w-full py-3 md:py-4 rounded-xl font-bold text-sm md:text-lg shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 ${
                   !jewelryFile || !logoFile
                     ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
                     : 'bg-stone-900 text-white hover:bg-stone-800 hover:shadow-xl'
                 }`}
               >
-                <span>Generate Studio Assets</span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H5"/><path d="M21 16h-2"/><path d="M16 19h2"/></svg>
+                <span>Generate Assets</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H5"/><path d="M21 16h-2"/><path d="M16 19h2"/></svg>
               </button>
             </div>
           </div>
@@ -385,6 +419,11 @@ const App: React.FC = () => {
                       <span className="px-2 md:px-3 py-1 bg-stone-50 text-stone-600 rounded-full border border-stone-100">
                         {analysis.style}
                       </span>
+                      {jewelrySize && (
+                        <span className="px-2 md:px-3 py-1 bg-stone-50 text-stone-600 rounded-full border border-stone-100">
+                          Size: {jewelrySize}
+                        </span>
+                      )}
                     </div>
                   )}
                </div>
@@ -464,7 +503,9 @@ const App: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2 mt-2 text-[10px] md:text-xs text-stone-500">
                         <span className="bg-stone-100 px-2 py-1 rounded-full">{project.images.length} Assets</span>
-                        <span className="bg-stone-100 px-2 py-1 rounded-full">2K Res</span>
+                        {project.jewelrySize && (
+                           <span className="bg-stone-100 px-2 py-1 rounded-full text-stone-600">{project.jewelrySize}</span>
+                        )}
                       </div>
                     </div>
                   </div>

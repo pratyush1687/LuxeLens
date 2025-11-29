@@ -23,9 +23,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ label, accept = "image/*", onCh
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <label className="text-xs md:text-sm font-medium text-stone-700 uppercase tracking-wide">{label}</label>
-      <div className={`relative flex items-center justify-center w-full h-36 md:h-52 border-2 border-dashed rounded-lg transition-all duration-300 ${preview ? 'border-stone-300 bg-stone-50' : 'border-stone-300 hover:border-amber-500 hover:bg-stone-50'}`}>
+    <div className="flex flex-col gap-2 h-full">
+      <label className="text-xs md:text-sm font-medium text-stone-700 uppercase tracking-wide truncate">{label}</label>
+      <div className={`relative flex-grow min-h-[8rem] md:min-h-[13rem] border-2 border-dashed rounded-lg transition-all duration-300 ${preview ? 'border-stone-300 bg-stone-50' : 'border-stone-300 hover:border-amber-500 hover:bg-stone-50'}`}>
         {preview ? (
           <div className="relative w-full h-full p-2 group flex items-center justify-center">
             <img src={preview} alt="Preview" className="max-w-full max-h-full object-contain rounded shadow-sm" />
@@ -44,13 +44,12 @@ const FileUpload: React.FC<FileUploadProps> = ({ label, accept = "image/*", onCh
             </button>
           </div>
         ) : (
-          <label htmlFor={id} className="flex flex-col items-center justify-center w-full h-full cursor-pointer p-4 text-center">
+          <label htmlFor={id} className="flex flex-col items-center justify-center w-full h-full cursor-pointer p-2 text-center">
             <div className="flex flex-col items-center justify-center">
-              <svg className="w-8 h-8 md:w-10 md:h-10 mb-3 text-stone-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+              <svg className="w-6 h-6 md:w-10 md:h-10 mb-2 md:mb-3 text-stone-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
                 <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
               </svg>
-              <p className="mb-1 text-xs md:text-sm text-stone-500"><span className="font-semibold">Click to upload</span></p>
-              <p className="text-[10px] md:text-xs text-stone-400">PNG, JPG</p>
+              <p className="mb-1 text-[10px] md:text-sm text-stone-500"><span className="font-semibold">Upload</span></p>
             </div>
             <input id={id} type="file" className="hidden" accept={accept} onChange={handleFileChange} />
           </label>

@@ -84,12 +84,13 @@ export const generateJewelryRendition = async (
   jewelryBase64: string,
   logoBase64: string,
   analysis: JewelryAnalysis,
-  scenarioPrompt: string
+  scenarioPrompt: string,
+  jewelrySize?: string
 ): Promise<string> => {
   const ai = getClient();
 
   // Construct a detailed prompt combining analysis and scenario
-  // Enhanced for realism using photographic terms
+  // Enhanced for realism using photographic terms and strictly enforcing scale
   const fullPrompt = `
     You are a world-class professional jewelry photographer using a Hasselblad H6D-100c.
     
@@ -97,6 +98,7 @@ export const generateJewelryRendition = async (
     - Item: ${analysis.description}
     - Category: ${analysis.category}
     - Style: ${analysis.style}
+    ${jewelrySize ? `- PHYSICAL SIZE: ${jewelrySize} (CRITICAL: Respect this scale)` : ''}
 
     Assignment:
     Create a hyper-realistic, 2K resolution commercial photograph of this jewelry item based on the following direction:
@@ -108,6 +110,9 @@ export const generateJewelryRendition = async (
     - Realism: Natural reflections, realistic metal textures, correct refractive index for gems. No CGI look, no plastic textures.
     - Camera: Shot on 100mm macro lens, depth of field f/16 for product clarity.
     
+    Scale Enforcement:
+    ${jewelrySize ? `The jewelry MUST appear to be exactly ${jewelrySize} in physical size relative to the environment or model. Do not hallucinate a giant or tiny version. If on a model, it must fit human proportions accurately.` : 'Maintain realistic scaling relative to a standard human size.'}
+
     Compositing Instructions:
     1. The first image provided is the REFERENCE JEWELRY ITEM. Use its exact shape, color, and material.
     2. The second image provided is the BRAND LOGO. You MUST overlay this logo in the TOP LEFT CORNER of the generated image as a subtle but visible watermark (opacity 80%).
