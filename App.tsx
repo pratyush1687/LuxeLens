@@ -5,6 +5,13 @@ import ScenarioCard from './components/ScenarioCard';
 import { analyzeJewelryImage, generateJewelryRendition, editGeneratedImage } from './services/geminiService';
 import { saveProjectToHistory, getProjectHistory, deleteProjectFromHistory, savePreferredLogo, getPreferredLogo } from './services/dbService';
 
+// Custom Crown Icon for Mi OMORFIA
+const CrownLogo = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
+  </svg>
+);
+
 const App: React.FC = () => {
   // State
   const [appState, setAppState] = useState<AppState>(AppState.API_KEY_SELECTION);
@@ -268,7 +275,7 @@ const App: React.FC = () => {
     if (completedImages.length === 0) return;
 
     for (const img of completedImages) {
-      handleDownload(img.url, `luxelens-${img.scenario.replace(/\s+/g, '-').toLowerCase()}.png`);
+      handleDownload(img.url, `mi-omorfia-${img.scenario.replace(/\s+/g, '-').toLowerCase()}.png`);
       await new Promise(r => setTimeout(r, 600));
     }
   };
@@ -319,10 +326,14 @@ const App: React.FC = () => {
     return (
       <div className="h-screen flex items-center justify-center bg-stone-50 p-6">
         <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-stone-100 text-center">
-          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6">
-             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          <div className="w-16 h-16 bg-gradient-to-br from-amber-50 to-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6 border border-amber-200">
+             <CrownLogo className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-serif font-bold text-stone-900 mb-2">LuxeLens AI Studio</h1>
+          <h1 className="text-3xl font-serif font-bold text-stone-900 mb-2">
+            <span className="font-script text-4xl mr-1">Mi</span> OMORFIA
+          </h1>
+          <p className="text-sm font-medium tracking-widest text-amber-700 uppercase mb-6">AI Studio</p>
+          
           <p className="text-stone-500 mb-8">
             Professional Jewelry Photography Generation powered by Nano Banana Pro (Gemini 3 Pro).
             Please select a paid API key to continue.
@@ -349,11 +360,17 @@ const App: React.FC = () => {
       {/* Header */}
       <header className="bg-white border-b border-stone-200 flex-shrink-0 h-16 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={reset}>
-             <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center text-white shadow-sm">
-               <span className="font-serif font-bold text-lg">L</span>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={reset}>
+             <div className="text-amber-600">
+               <CrownLogo className="w-8 h-8" />
              </div>
-             <span className="font-serif font-bold text-lg md:text-xl tracking-tight text-stone-900">LuxeLens</span>
+             <div className="flex flex-col md:flex-row md:items-baseline gap-0 md:gap-2">
+               <div className="flex items-baseline">
+                 <span className="font-script text-2xl md:text-3xl text-stone-900 mr-1.5">Mi</span>
+                 <span className="font-serif font-bold text-lg md:text-xl tracking-wider text-stone-900">OMORFIA</span>
+               </div>
+               <span className="text-[10px] md:text-xs font-medium tracking-[0.2em] text-amber-600 uppercase hidden sm:inline-block">Jewelry with Style</span>
+             </div>
           </div>
 
           {/* Nav Actions */}
@@ -383,8 +400,8 @@ const App: React.FC = () => {
 
         {/* Upload View */}
         {appState === AppState.UPLOAD && (
-          <div className="flex-1 overflow-y-auto flex flex-col justify-center py-4 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl mx-auto animate-fade-in w-full">
+          <div className="flex-1 overflow-y-auto flex flex-col justify-center py-4 px-4 sm:px-6 lg:px-8 custom-scrollbar">
+            <div className="max-w-3xl mx-auto animate-fade-in w-full min-h-[calc(100vh-8rem)] flex flex-col justify-center">
               <div className="text-center mb-4 md:mb-8">
                 <h2 className="text-2xl md:text-4xl font-serif font-bold text-stone-900 mb-1 md:mb-2">Studio Quality Assets</h2>
                 <p className="text-xs md:text-lg text-stone-600 leading-relaxed max-w-xl mx-auto hidden xs:block">
