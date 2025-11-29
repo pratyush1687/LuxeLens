@@ -16,6 +16,13 @@ const App: React.FC = () => {
   // Initialize API Key check
   const checkApiKey = useCallback(async () => {
     try {
+      // 1. Check if environment variable is already populated (Deployment support)
+      if (process.env.API_KEY) {
+        setAppState(AppState.UPLOAD);
+        return;
+      }
+
+      // 2. Check aistudio helper (IDX support)
       const aistudio = (window as any).aistudio;
       if (aistudio && await aistudio.hasSelectedApiKey()) {
         setAppState(AppState.UPLOAD);
@@ -24,6 +31,8 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Error checking API key", e);
+      // If check fails, default to selection screen, but handleApiKeySelect will allow bypass
+      setAppState(AppState.API_KEY_SELECTION);
     }
   }, []);
 
@@ -36,11 +45,15 @@ const App: React.FC = () => {
       const aistudio = (window as any).aistudio;
       if (aistudio) {
         await aistudio.openSelectKey();
-        // Assume success and proceed, handling race condition by just moving forward
-        setAppState(AppState.UPLOAD);
       }
+      // Always proceed to UPLOAD. 
+      // If the key wasn't actually selected/set, the service layer will throw a helpful error 
+      // when the user tries to generate, rather than blocking them here.
+      setAppState(AppState.UPLOAD);
     } catch (e) {
-      setError("Failed to select API Key. Please try again.");
+      console.error("Failed to select API Key", e);
+      // Fallback: move to upload anyway so user isn't stuck
+      setAppState(AppState.UPLOAD);
     }
   };
 
