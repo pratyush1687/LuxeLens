@@ -164,3 +164,61 @@ export const generateJewelryRendition = async (
     }
   });
 };
+
+export const editGeneratedImage = async (
+  imageBase64: string,
+  editPrompt: string
+): Promise<string> => {
+  const ai = getClient();
+
+  const fullPrompt = `
+    You are a professional expert photo editor.
+    
+    Task:
+    Edit the provided image based on the following instruction:
+    "${editPrompt}"
+
+    Requirements:
+    - Maintain the photo-realistic 2K quality.
+    - Keep the core jewelry item intact unless asked to modify it.
+    - Apply lighting, background, or stylistic changes as requested.
+    
+    Output:
+    The edited image in high resolution.
+  `;
+
+  return retryWithBackoff(async () => {
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-pro-image-preview",
+        contents: {
+          parts: [
+            { 
+              inlineData: { 
+                mimeType: getMimeType(imageBase64), 
+                data: stripBase64Prefix(imageBase64) 
+              } 
+            },
+            { text: fullPrompt }
+          ]
+        },
+        config: {
+          imageConfig: {
+            imageSize: '2K',
+            aspectRatio: '1:1'
+          }
+        }
+      });
+
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+      throw new Error("No image data in response");
+    } catch (error) {
+      console.error("Edit generation error:", error);
+      throw error;
+    }
+  });
+};
