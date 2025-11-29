@@ -82,7 +82,7 @@ const retryWithBackoff = async <T>(fn: () => Promise<T>, retries = 5, initialDel
 
 export const generateJewelryRendition = async (
   jewelryBase64: string,
-  logoBase64: string,
+  logoBase64: string | null,
   analysis: JewelryAnalysis,
   scenarioPrompt: string,
   jewelrySize?: string
@@ -115,11 +115,32 @@ export const generateJewelryRendition = async (
 
     Compositing Instructions:
     1. The first image provided is the REFERENCE JEWELRY ITEM. Use its exact shape, color, and material.
-    2. The second image provided is the BRAND LOGO. You MUST overlay this logo in the TOP LEFT CORNER of the generated image as a subtle but visible watermark (opacity 80%).
+    ${logoBase64 ? '2. The second image provided is the BRAND LOGO. You MUST overlay this logo in the TOP LEFT CORNER of the generated image as a subtle but visible watermark (opacity 80%).' : ''}
     
     Output:
     A single, stunning, award-winning commercial jewelry photograph.
   `;
+
+  // Dynamically construct parts
+  const parts: any[] = [
+    { 
+      inlineData: { 
+        mimeType: getMimeType(jewelryBase64), 
+        data: stripBase64Prefix(jewelryBase64) 
+      } 
+    }
+  ];
+
+  if (logoBase64) {
+    parts.push({ 
+      inlineData: { 
+        mimeType: getMimeType(logoBase64), 
+        data: stripBase64Prefix(logoBase64) 
+      } 
+    });
+  }
+
+  parts.push({ text: fullPrompt });
 
   return retryWithBackoff(async () => {
     try {
@@ -127,21 +148,7 @@ export const generateJewelryRendition = async (
       const response = await ai.models.generateContent({
         model: "gemini-3-pro-image-preview",
         contents: {
-          parts: [
-            { 
-              inlineData: { 
-                mimeType: getMimeType(jewelryBase64), 
-                data: stripBase64Prefix(jewelryBase64) 
-              } 
-            },
-            { 
-              inlineData: { 
-                mimeType: getMimeType(logoBase64), 
-                data: stripBase64Prefix(logoBase64) 
-              } 
-            },
-            { text: fullPrompt }
-          ]
+          parts: parts
         },
         config: {
           imageConfig: {

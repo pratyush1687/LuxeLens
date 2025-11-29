@@ -74,8 +74,8 @@ const App: React.FC = () => {
   };
 
   const startGeneration = async () => {
-    if (!jewelryFile || !logoFile) {
-      setError("Please upload both jewelry image and logo.");
+    if (!jewelryFile) {
+      setError("Please upload a jewelry image.");
       return;
     }
 
@@ -120,7 +120,7 @@ const App: React.FC = () => {
 
   const generateAllScenarios = async (
     jFile: string, 
-    lFile: string, 
+    lFile: string | null, 
     analysisData: JewelryAnalysis,
     placeholders: GeneratedImage[],
     sizeStr?: string
@@ -230,7 +230,7 @@ const App: React.FC = () => {
          // We need to construct the updated project object to save it
          const updatedImagesList = generatedImages.map(img => img.id === id ? updatedItem : img);
          
-         if (jewelryFile && logoFile && analysis) {
+         if (jewelryFile && analysis) {
            const updatedProject: Project = {
              id: currentProjectId,
              timestamp: Date.now(), // update timestamp on edit
@@ -406,7 +406,7 @@ const App: React.FC = () => {
                   <div className="col-span-1">
                      <FileUpload 
                       id="logo-upload"
-                      label="2. Logo" 
+                      label="2. Logo (Optional)" 
                       preview={logoFile} 
                       onChange={handleLogoChange} 
                     />
@@ -431,9 +431,9 @@ const App: React.FC = () => {
 
                 <button
                   onClick={startGeneration}
-                  disabled={!jewelryFile || !logoFile}
+                  disabled={!jewelryFile}
                   className={`w-full py-3 md:py-4 rounded-xl font-bold text-sm md:text-lg shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 ${
-                    !jewelryFile || !logoFile
+                    !jewelryFile
                       ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
                       : 'bg-stone-900 text-white hover:bg-stone-800 hover:shadow-xl'
                   }`}

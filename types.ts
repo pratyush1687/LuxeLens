@@ -23,14 +23,14 @@ export interface GeneratedImage {
 
 export interface GenerationConfig {
   jewelryImage: string; // Base64
-  logoImage: string; // Base64
+  logoImage?: string | null; // Base64
 }
 
 export interface Project {
   id: string;
   timestamp: number;
   jewelryFile: string;
-  logoFile: string;
+  logoFile: string | null;
   jewelrySize?: string;
   analysis: JewelryAnalysis;
   images: GeneratedImage[];
