@@ -58,7 +58,8 @@ export const analyzeJewelryImage = async (base64Image: string): Promise<JewelryA
 };
 
 // Retry helper for 429 errors
-const retryWithBackoff = async <T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> => {
+// Increased delay and retries for stability
+const retryWithBackoff = async <T>(fn: () => Promise<T>, retries = 5, initialDelay = 4000): Promise<T> => {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
@@ -67,8 +68,10 @@ const retryWithBackoff = async <T>(fn: () => Promise<T>, retries = 3, delay = 20
       const isQuotaError = error?.status === 429 || error?.code === 429 || error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
       
       if (isQuotaError && i < retries - 1) {
-        console.warn(`Quota exceeded (429), retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay * (i + 1)));
+        // Exponential backoff with jitter
+        const delay = initialDelay * Math.pow(2, i) + Math.random() * 1000;
+        console.warn(`Quota exceeded (429), retrying in ${Math.round(delay)}ms...`);
+        await new Promise(r => setTimeout(r, delay));
         continue;
       }
       throw error;

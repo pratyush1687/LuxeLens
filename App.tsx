@@ -3,7 +3,7 @@ import { AppState, JewelryAnalysis, GeneratedImage, Project } from './types';
 import FileUpload from './components/FileUpload';
 import ScenarioCard from './components/ScenarioCard';
 import { analyzeJewelryImage, generateJewelryRendition } from './services/geminiService';
-import { saveProjectToHistory, getProjectHistory, deleteProjectFromHistory } from './services/dbService';
+import { saveProjectToHistory, getProjectHistory, deleteProjectFromHistory, savePreferredLogo, getPreferredLogo } from './services/dbService';
 
 const App: React.FC = () => {
   // State
@@ -15,9 +15,15 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
 
-  // Initialize API Key check
+  // Initialize API Key check and Load Logo
   const checkApiKey = useCallback(async () => {
     try {
+      // Load logo from DB
+      const savedLogo = await getPreferredLogo();
+      if (savedLogo) {
+        setLogoFile(savedLogo);
+      }
+
       // 1. Check if environment variable is already populated (Deployment support)
       if (process.env.API_KEY) {
         setAppState(AppState.UPLOAD);
@@ -32,8 +38,7 @@ const App: React.FC = () => {
         setAppState(AppState.API_KEY_SELECTION);
       }
     } catch (e) {
-      console.error("Error checking API key", e);
-      // If check fails, default to selection screen, but handleApiKeySelect will allow bypass
+      console.error("Error initializing app", e);
       setAppState(AppState.API_KEY_SELECTION);
     }
   }, []);
@@ -48,14 +53,21 @@ const App: React.FC = () => {
       if (aistudio) {
         await aistudio.openSelectKey();
       }
-      // Always proceed to UPLOAD. 
-      // If the key wasn't actually selected/set, the service layer will throw a helpful error 
-      // when the user tries to generate, rather than blocking them here.
       setAppState(AppState.UPLOAD);
     } catch (e) {
       console.error("Failed to select API Key", e);
-      // Fallback: move to upload anyway so user isn't stuck
       setAppState(AppState.UPLOAD);
+    }
+  };
+
+  const handleLogoChange = async (file: File | null, base64: string | null) => {
+    setLogoFile(base64);
+    if (base64) {
+      try {
+        await savePreferredLogo(base64);
+      } catch (e) {
+        console.error("Failed to save logo preference", e);
+      }
     }
   };
 
@@ -110,11 +122,11 @@ const App: React.FC = () => {
     placeholders: GeneratedImage[]
   ) => {
     // Process all scenarios in parallel
-    // Since RPM is 20, firing 6 requests at once is safe.
-    // We add a small stagger delay to avoid browser connection limits or burst QPS blocks.
+    // Since RPM limits can be strict for complex image generation, we stagger requests significantly.
     const promises = placeholders.map(async (item, index) => {
-      // Stagger start times by 250ms
-      await new Promise(resolve => setTimeout(resolve, index * 250));
+      // Stagger start times by 2 seconds to avoid 429 bursts
+      // T0, T+2s, T+4s, etc.
+      await new Promise(resolve => setTimeout(resolve, index * 2000));
 
       try {
         let prompt = "";
@@ -131,7 +143,6 @@ const App: React.FC = () => {
         } else if (item.scenario === "Side View") {
           prompt = `A profile side view macro shot of the jewelry showing the depth of the setting, prongs, and gallery. Shallow depth of field (f/2.8) blurring the background, focus sharp on the metalwork.`;
         } else if (item.scenario === "Model Shot") {
-          // Complex logic for model shot
           if (analysisData.category === 'Ring') {
             prompt = `A hyper-realistic close-up of a hand with natural skin texture wearing the ring. The hand is posed elegantly. Soft natural light. Focus is strictly on the ring.`;
           } else {
@@ -163,7 +174,6 @@ const App: React.FC = () => {
       }
     });
 
-    // Wait for all to finish, then save to history
     const results = await Promise.all(promises);
     
     // Auto-save project
@@ -197,10 +207,8 @@ const App: React.FC = () => {
     const completedImages = generatedImages.filter(img => img.status === 'completed');
     if (completedImages.length === 0) return;
 
-    // Provide visual feedback (optional but good practice)
     for (const img of completedImages) {
       handleDownload(img.url, `luxelens-${img.scenario.replace(/\s+/g, '-').toLowerCase()}.png`);
-      // Add a delay between downloads to ensure browser doesn't block multiples
       await new Promise(r => setTimeout(r, 600));
     }
   };
@@ -237,7 +245,7 @@ const App: React.FC = () => {
   const reset = () => {
     setAppState(AppState.UPLOAD);
     setJewelryFile(null);
-    setLogoFile(null);
+    // Do NOT clear logoFile, keep it persisted
     setGeneratedImages([]);
     setAnalysis(null);
   };
@@ -274,52 +282,52 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900">
+    <div className="min-h-screen bg-stone-50 text-stone-900 font-sans">
       {/* Header */}
       <header className="bg-white border-b border-stone-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={reset}>
-             <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center text-white">
+             <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center text-white shadow-sm">
                <span className="font-serif font-bold text-lg">L</span>
              </div>
-             <span className="font-serif font-bold text-xl tracking-tight text-stone-900">LuxeLens</span>
+             <span className="font-serif font-bold text-lg md:text-xl tracking-tight text-stone-900">LuxeLens</span>
           </div>
 
           {/* Nav Actions */}
-          {appState !== AppState.API_KEY_SELECTION && (
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={loadHistory}
-                className={`flex items-center gap-2 text-sm font-medium transition-colors ${appState === AppState.HISTORY ? 'text-amber-600' : 'text-stone-600 hover:text-stone-900'}`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                History
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={loadHistory}
+              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${appState === AppState.HISTORY ? 'text-amber-600' : 'text-stone-600 hover:text-stone-900'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span className="hidden sm:inline">History</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
         
         {/* Error Message */}
         {error && (
-          <div className="mb-8 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-center gap-2 animate-pulse">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            {error}
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-start gap-3 animate-pulse text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p>{error}</p>
           </div>
         )}
 
         {/* Upload View */}
         {appState === AppState.UPLOAD && (
           <div className="max-w-3xl mx-auto animate-fade-in">
-            <div className="text-center mb-10">
-              <h2 className="text-4xl font-serif font-bold text-stone-900 mb-4">Create Studio Quality Assets</h2>
-              <p className="text-lg text-stone-600">Upload your product photo and logo. We'll handle the lighting, staging, and models using the high-fidelity Nano Banana Pro engine.</p>
+            <div className="text-center mb-8 md:mb-10">
+              <h2 className="text-3xl md:text-4xl font-serif font-bold text-stone-900 mb-3">Studio Quality Assets</h2>
+              <p className="text-sm md:text-lg text-stone-600 leading-relaxed max-w-xl mx-auto">
+                Upload your product photo. We'll utilize Nano Banana Pro to generate professional marketing assets instantly.
+              </p>
             </div>
 
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-stone-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div className="bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-stone-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-6 md:mb-8">
                 <FileUpload 
                   id="jewelry-upload"
                   label="1. Product Photograph" 
@@ -328,22 +336,22 @@ const App: React.FC = () => {
                 />
                 <FileUpload 
                   id="logo-upload"
-                  label="2. Brand Logo (Transparent PNG)" 
+                  label="2. Brand Logo" 
                   preview={logoFile} 
-                  onChange={(_, base64) => setLogoFile(base64)} 
+                  onChange={handleLogoChange} 
                 />
               </div>
 
               <button
                 onClick={startGeneration}
                 disabled={!jewelryFile || !logoFile}
-                className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${
+                className={`w-full py-3.5 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 ${
                   !jewelryFile || !logoFile
                     ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
                     : 'bg-stone-900 text-white hover:bg-stone-800 hover:shadow-xl'
                 }`}
               >
-                <span>Generate Studio Assets (2K)</span>
+                <span>Generate Studio Assets</span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H5"/><path d="M21 16h-2"/><path d="M16 19h2"/></svg>
               </button>
             </div>
@@ -352,56 +360,53 @@ const App: React.FC = () => {
 
         {/* Analyzing View */}
         {appState === AppState.ANALYZING && (
-          <div className="max-w-lg mx-auto text-center mt-20">
-             <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin mx-auto mb-6"></div>
-             <h3 className="text-2xl font-serif font-bold text-stone-900 mb-2">Analyzing your jewelry...</h3>
-             <p className="text-stone-500">identifying materials, style, and category to tailor the perfect photoshoot.</p>
+          <div className="max-w-lg mx-auto text-center mt-12 md:mt-20 px-4">
+             <div className="w-12 h-12 md:w-16 md:h-16 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin mx-auto mb-6"></div>
+             <h3 className="text-xl md:text-2xl font-serif font-bold text-stone-900 mb-2">Analyzing your jewelry...</h3>
+             <p className="text-sm md:text-base text-stone-500">identifying materials, style, and category to tailor the perfect photoshoot.</p>
           </div>
         )}
 
         {/* Results View */}
         {appState === AppState.RESULTS && (
           <div className="animate-fade-in">
-             <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+             <div className="bg-white p-4 md:p-6 rounded-xl border border-stone-200 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
                <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-2xl font-serif font-bold text-stone-900">Production Gallery</h2>
-                    <span className="px-2 py-0.5 bg-stone-900 text-stone-50 text-xs font-semibold rounded uppercase tracking-wider">Nano Banana Pro</span>
+                    <h2 className="text-xl md:text-2xl font-serif font-bold text-stone-900">Production Gallery</h2>
+                    <span className="hidden md:inline-block px-2 py-0.5 bg-stone-900 text-stone-50 text-xs font-semibold rounded uppercase tracking-wider">Nano Banana Pro</span>
                   </div>
                   
                   {analysis && (
-                    <div className="flex flex-wrap gap-2 text-sm">
-                      <span className="px-3 py-1 bg-amber-50 text-amber-800 rounded-full border border-amber-100 font-medium">
+                    <div className="flex flex-wrap gap-2 text-xs md:text-sm">
+                      <span className="px-2 md:px-3 py-1 bg-amber-50 text-amber-800 rounded-full border border-amber-100 font-medium">
                         {analysis.category}
                       </span>
-                      <span className="px-3 py-1 bg-stone-50 text-stone-600 rounded-full border border-stone-100">
+                      <span className="px-2 md:px-3 py-1 bg-stone-50 text-stone-600 rounded-full border border-stone-100">
                         {analysis.style}
-                      </span>
-                      <span className="px-3 py-1 bg-stone-50 text-stone-600 rounded-full border border-stone-100 hidden sm:inline-block">
-                        {analysis.recommendedAttire}
                       </span>
                     </div>
                   )}
                </div>
 
-               <div className="flex flex-wrap items-center gap-3">
-                 <button onClick={reset} className="px-5 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 border border-stone-200 transition-colors">
+               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                 <button onClick={reset} className="justify-center px-4 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 border border-stone-200 transition-colors flex items-center">
                    New Project
                  </button>
                  
                  {generatedImages.some(img => img.status === 'completed') && (
                     <button 
                       onClick={handleDownloadAll}
-                      className="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                      className="justify-center px-4 py-2.5 rounded-lg text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 shadow-md hover:shadow-lg transition-all flex items-center gap-2"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      Download All Assets
+                      Download All
                     </button>
                  )}
                </div>
              </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                {generatedImages.map((img) => (
                  <ScenarioCard key={img.id} item={img} onDownload={handleDownload} />
                ))}
@@ -412,10 +417,10 @@ const App: React.FC = () => {
         {/* History View */}
         {appState === AppState.HISTORY && (
           <div className="animate-fade-in">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-serif font-bold text-stone-900">Project History</h2>
+            <div className="flex items-center justify-between mb-6 md:mb-8">
+              <h2 className="text-2xl md:text-3xl font-serif font-bold text-stone-900">Project History</h2>
               <button onClick={reset} className="px-4 py-2 bg-stone-900 text-white rounded-lg text-sm font-medium hover:bg-stone-800 transition-colors">
-                + Create New
+                + New
               </button>
             </div>
 
@@ -425,30 +430,29 @@ const App: React.FC = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <p className="text-stone-500">No projects saved yet.</p>
-                <p className="text-sm text-stone-400 mt-1">Projects will automatically appear here after generation.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {projects.map(project => (
                   <div 
                     key={project.id} 
                     onClick={() => restoreProject(project)}
                     className="group bg-white rounded-xl border border-stone-200 overflow-hidden cursor-pointer hover:shadow-lg transition-all hover:border-amber-300"
                   >
-                    <div className="relative h-48 bg-stone-100">
+                    <div className="relative h-40 md:h-48 bg-stone-100">
                       <img src={project.jewelryFile} alt="Project Source" className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                       <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded text-xs font-medium text-stone-700 shadow-sm backdrop-blur-sm">
                         {new Date(project.timestamp).toLocaleDateString()}
                       </div>
                     </div>
-                    <div className="p-4">
+                    <div className="p-3 md:p-4">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h3 className="font-serif font-bold text-lg text-stone-900 group-hover:text-amber-700 transition-colors">
-                            {project.analysis?.category || 'Jewelry'} Project
+                          <h3 className="font-serif font-bold text-base md:text-lg text-stone-900 group-hover:text-amber-700 transition-colors truncate max-w-[150px]">
+                            {project.analysis?.category || 'Jewelry'}
                           </h3>
-                          <p className="text-xs text-stone-500">{project.analysis?.style || 'Style Analysis'}</p>
+                          <p className="text-xs text-stone-500 truncate">{project.analysis?.style || 'Style Analysis'}</p>
                         </div>
                         <button 
                           onClick={(e) => deleteProject(e, project.id)}
@@ -458,7 +462,7 @@ const App: React.FC = () => {
                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         </button>
                       </div>
-                      <div className="flex items-center gap-2 mt-4 text-xs text-stone-500">
+                      <div className="flex items-center gap-2 mt-2 text-[10px] md:text-xs text-stone-500">
                         <span className="bg-stone-100 px-2 py-1 rounded-full">{project.images.length} Assets</span>
                         <span className="bg-stone-100 px-2 py-1 rounded-full">2K Res</span>
                       </div>
