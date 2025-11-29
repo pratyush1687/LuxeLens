@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AppState, JewelryAnalysis, GeneratedImage } from './types';
+import { AppState, JewelryAnalysis, GeneratedImage, Project } from './types';
 import FileUpload from './components/FileUpload';
 import ScenarioCard from './components/ScenarioCard';
 import { analyzeJewelryImage, generateJewelryRendition } from './services/geminiService';
+import { saveProjectToHistory, getProjectHistory, deleteProjectFromHistory } from './services/dbService';
 
 const App: React.FC = () => {
   // State
@@ -12,6 +13,7 @@ const App: React.FC = () => {
   const [analysis, setAnalysis] = useState<JewelryAnalysis | null>(null);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
 
   // Initialize API Key check
   const checkApiKey = useCallback(async () => {
@@ -143,19 +145,43 @@ const App: React.FC = () => {
         // Generate with new service (2K resolution handled internally)
         const generatedUrl = await generateJewelryRendition(jFile, lFile, analysisData, prompt);
 
+        const updatedItem: GeneratedImage = { ...item, url: generatedUrl, status: 'completed' };
+        
         setGeneratedImages(prev => prev.map(img => 
-          img.id === item.id ? { ...img, url: generatedUrl, status: 'completed' } : img
+          img.id === item.id ? updatedItem : img
         ));
+
+        return updatedItem;
 
       } catch (e) {
         console.error(`Failed to generate ${item.scenario}`, e);
+        const failedItem: GeneratedImage = { ...item, status: 'failed' };
         setGeneratedImages(prev => prev.map(img => 
-          img.id === item.id ? { ...img, status: 'failed' } : img
+          img.id === item.id ? failedItem : img
         ));
+        return failedItem;
       }
     });
 
-    await Promise.all(promises);
+    // Wait for all to finish, then save to history
+    const results = await Promise.all(promises);
+    
+    // Auto-save project
+    const newProject: Project = {
+      id: Date.now().toString(),
+      timestamp: Date.now(),
+      jewelryFile: jFile,
+      logoFile: lFile,
+      analysis: analysisData,
+      images: results
+    };
+    
+    try {
+      await saveProjectToHistory(newProject);
+      console.log("Project auto-saved to history");
+    } catch (saveError) {
+      console.error("Failed to auto-save project", saveError);
+    }
   };
 
   const handleDownload = (url: string, filename: string) => {
@@ -176,6 +202,35 @@ const App: React.FC = () => {
       handleDownload(img.url, `luxelens-${img.scenario.replace(/\s+/g, '-').toLowerCase()}.png`);
       // Add a delay between downloads to ensure browser doesn't block multiples
       await new Promise(r => setTimeout(r, 600));
+    }
+  };
+
+  const loadHistory = async () => {
+    try {
+      const data = await getProjectHistory();
+      setProjects(data);
+      setAppState(AppState.HISTORY);
+    } catch (e) {
+      console.error("Failed to load history", e);
+      setError("Could not load project history.");
+    }
+  };
+
+  const restoreProject = (project: Project) => {
+    setJewelryFile(project.jewelryFile);
+    setLogoFile(project.logoFile);
+    setAnalysis(project.analysis);
+    setGeneratedImages(project.images);
+    setAppState(AppState.RESULTS);
+  };
+
+  const deleteProject = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      await deleteProjectFromHistory(id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error("Failed to delete project", err);
     }
   };
 
@@ -229,6 +284,19 @@ const App: React.FC = () => {
              </div>
              <span className="font-serif font-bold text-xl tracking-tight text-stone-900">LuxeLens</span>
           </div>
+
+          {/* Nav Actions */}
+          {appState !== AppState.API_KEY_SELECTION && (
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={loadHistory}
+                className={`flex items-center gap-2 text-sm font-medium transition-colors ${appState === AppState.HISTORY ? 'text-amber-600' : 'text-stone-600 hover:text-stone-900'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                History
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -338,6 +406,67 @@ const App: React.FC = () => {
                  <ScenarioCard key={img.id} item={img} onDownload={handleDownload} />
                ))}
              </div>
+          </div>
+        )}
+
+        {/* History View */}
+        {appState === AppState.HISTORY && (
+          <div className="animate-fade-in">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-serif font-bold text-stone-900">Project History</h2>
+              <button onClick={reset} className="px-4 py-2 bg-stone-900 text-white rounded-lg text-sm font-medium hover:bg-stone-800 transition-colors">
+                + Create New
+              </button>
+            </div>
+
+            {projects.length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-xl border border-dashed border-stone-300">
+                <div className="w-12 h-12 bg-stone-100 text-stone-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <p className="text-stone-500">No projects saved yet.</p>
+                <p className="text-sm text-stone-400 mt-1">Projects will automatically appear here after generation.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects.map(project => (
+                  <div 
+                    key={project.id} 
+                    onClick={() => restoreProject(project)}
+                    className="group bg-white rounded-xl border border-stone-200 overflow-hidden cursor-pointer hover:shadow-lg transition-all hover:border-amber-300"
+                  >
+                    <div className="relative h-48 bg-stone-100">
+                      <img src={project.jewelryFile} alt="Project Source" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                      <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded text-xs font-medium text-stone-700 shadow-sm backdrop-blur-sm">
+                        {new Date(project.timestamp).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h3 className="font-serif font-bold text-lg text-stone-900 group-hover:text-amber-700 transition-colors">
+                            {project.analysis?.category || 'Jewelry'} Project
+                          </h3>
+                          <p className="text-xs text-stone-500">{project.analysis?.style || 'Style Analysis'}</p>
+                        </div>
+                        <button 
+                          onClick={(e) => deleteProject(e, project.id)}
+                          className="p-1.5 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                          title="Delete Project"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 mt-4 text-xs text-stone-500">
+                        <span className="bg-stone-100 px-2 py-1 rounded-full">{project.images.length} Assets</span>
+                        <span className="bg-stone-100 px-2 py-1 rounded-full">2K Res</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

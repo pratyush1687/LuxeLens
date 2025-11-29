@@ -4,6 +4,7 @@ export enum AppState {
   ANALYZING = 'ANALYZING',
   GENERATING = 'GENERATING',
   RESULTS = 'RESULTS',
+  HISTORY = 'HISTORY',
 }
 
 export interface JewelryAnalysis {
@@ -23,4 +24,13 @@ export interface GeneratedImage {
 export interface GenerationConfig {
   jewelryImage: string; // Base64
   logoImage: string; // Base64
+}
+
+export interface Project {
+  id: string;
+  timestamp: number;
+  jewelryFile: string;
+  logoFile: string;
+  analysis: JewelryAnalysis;
+  images: GeneratedImage[];
 }
