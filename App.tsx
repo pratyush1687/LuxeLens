@@ -5,11 +5,32 @@ import ScenarioCard from './components/ScenarioCard';
 import { analyzeJewelryImage, generateJewelryRendition, editGeneratedImage } from './services/geminiService';
 import { saveProjectToHistory, getProjectHistory, deleteProjectFromHistory, savePreferredLogo, getPreferredLogo } from './services/dbService';
 
-// Custom Crown Icon for Mi OMORFIA
-const CrownLogo = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
-  </svg>
+// Mi OMORFIA Branding Component
+const MiOmorfiaLogo = () => (
+  <div className="flex flex-col items-center justify-center">
+    <div className="flex items-baseline justify-center relative">
+      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 text-amber-500">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+           <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
+        </svg>
+      </div>
+      <span className="font-script text-4xl md:text-5xl text-stone-900 leading-none mr-2">Mi</span>
+      <span className="font-serif text-2xl md:text-3xl tracking-widest text-stone-900 leading-none">OMORFIA</span>
+    </div>
+    <div className="w-full h-px bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1"></div>
+    <span className="text-[9px] md:text-[10px] tracking-[0.4em] text-amber-700 uppercase font-serif">Jewelry with Style</span>
+  </div>
+);
+
+// Simplified Logo for small headers
+const MiOmorfiaLogoSmall = () => (
+  <div className="flex items-center gap-2">
+    <span className="font-script text-3xl text-stone-900">Mi</span>
+    <div className="flex flex-col items-start">
+      <span className="font-serif text-lg tracking-widest text-stone-900 leading-none">OMORFIA</span>
+      <span className="text-[7px] tracking-[0.2em] text-amber-600 uppercase">Jewelry with Style</span>
+    </div>
+  </div>
 );
 
 const App: React.FC = () => {
@@ -141,6 +162,7 @@ const App: React.FC = () => {
 
       try {
         let prompt = "";
+        let isModelShot = false;
         
         // Custom Prompt Logic based on Scenario & Analysis
         if (item.scenario === "Black Satin Background") {
@@ -154,6 +176,7 @@ const App: React.FC = () => {
         } else if (item.scenario === "Side View") {
           prompt = `A profile side view macro shot of the jewelry showing the depth of the setting, prongs, and gallery. Shallow depth of field (f/2.8) blurring the background, focus sharp on the metalwork.`;
         } else if (item.scenario === "Model Shot") {
+          isModelShot = true;
           if (analysisData.category === 'Ring') {
             prompt = `A hyper-realistic close-up of a hand with natural skin texture wearing the ring. The hand is posed elegantly. Soft natural light. Focus is strictly on the ring.`;
           } else {
@@ -164,8 +187,8 @@ const App: React.FC = () => {
           }
         }
 
-        // Generate with new service (2K resolution handled internally)
-        const generatedUrl = await generateJewelryRendition(jFile, lFile, analysisData, prompt, sizeStr);
+        // Generate with service (Flash for products, Pro for models)
+        const generatedUrl = await generateJewelryRendition(jFile, lFile, analysisData, prompt, sizeStr, isModelShot);
 
         const updatedItem: GeneratedImage = { ...item, url: generatedUrl, status: 'completed' };
         
@@ -275,7 +298,7 @@ const App: React.FC = () => {
     if (completedImages.length === 0) return;
 
     for (const img of completedImages) {
-      handleDownload(img.url, `mi-omorfia-${img.scenario.replace(/\s+/g, '-').toLowerCase()}.png`);
+      handleDownload(img.url, `miomorfia-${img.scenario.replace(/\s+/g, '-').toLowerCase()}.png`);
       await new Promise(r => setTimeout(r, 600));
     }
   };
@@ -326,16 +349,12 @@ const App: React.FC = () => {
     return (
       <div className="h-screen flex items-center justify-center bg-stone-50 p-6">
         <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-stone-100 text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-amber-50 to-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6 border border-amber-200">
-             <CrownLogo className="w-8 h-8" />
+          <div className="mb-8">
+             <MiOmorfiaLogo />
           </div>
-          <h1 className="text-3xl font-serif font-bold text-stone-900 mb-2">
-            <span className="font-script text-4xl mr-1">Mi</span> OMORFIA
-          </h1>
-          <p className="text-sm font-medium tracking-widest text-amber-700 uppercase mb-6">AI Studio</p>
           
           <p className="text-stone-500 mb-8">
-            Professional Jewelry Photography Generation powered by Nano Banana Pro (Gemini 3 Pro).
+            Professional Jewelry Photography Generation powered by Nano Banana (Flash) & Nano Banana Pro (Gemini 3 Pro).
             Please select a paid API key to continue.
           </p>
           <button 
@@ -361,16 +380,7 @@ const App: React.FC = () => {
       <header className="bg-white border-b border-stone-200 flex-shrink-0 h-16 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer" onClick={reset}>
-             <div className="text-amber-600">
-               <CrownLogo className="w-8 h-8" />
-             </div>
-             <div className="flex flex-col md:flex-row md:items-baseline gap-0 md:gap-2">
-               <div className="flex items-baseline">
-                 <span className="font-script text-2xl md:text-3xl text-stone-900 mr-1.5">Mi</span>
-                 <span className="font-serif font-bold text-lg md:text-xl tracking-wider text-stone-900">OMORFIA</span>
-               </div>
-               <span className="text-[10px] md:text-xs font-medium tracking-[0.2em] text-amber-600 uppercase hidden sm:inline-block">Jewelry with Style</span>
-             </div>
+             <MiOmorfiaLogoSmall />
           </div>
 
           {/* Nav Actions */}
@@ -405,7 +415,7 @@ const App: React.FC = () => {
               <div className="text-center mb-4 md:mb-8">
                 <h2 className="text-2xl md:text-4xl font-serif font-bold text-stone-900 mb-1 md:mb-2">Studio Quality Assets</h2>
                 <p className="text-xs md:text-lg text-stone-600 leading-relaxed max-w-xl mx-auto hidden xs:block">
-                  Upload your product photo. We'll utilize Nano Banana Pro to generate professional marketing assets instantly.
+                  Upload your product photo. We'll utilize Nano Banana (Gemini Flash) & Nano Banana Pro (Gemini 3 Pro) to generate professional marketing assets instantly.
                 </p>
               </div>
 
@@ -481,7 +491,6 @@ const App: React.FC = () => {
                  <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-xl md:text-2xl font-serif font-bold text-stone-900">Production Gallery</h2>
-                      <span className="hidden md:inline-block px-2 py-0.5 bg-stone-900 text-stone-50 text-xs font-semibold rounded uppercase tracking-wider">Nano Banana Pro</span>
                     </div>
                     
                     {analysis && (

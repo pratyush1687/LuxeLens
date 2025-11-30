@@ -85,7 +85,8 @@ export const generateJewelryRendition = async (
   logoBase64: string | null,
   analysis: JewelryAnalysis,
   scenarioPrompt: string,
-  jewelrySize?: string
+  jewelrySize?: string,
+  isModelShot: boolean = false
 ): Promise<string> => {
   const ai = getClient();
 
@@ -101,7 +102,7 @@ export const generateJewelryRendition = async (
     ${jewelrySize ? `- PHYSICAL SIZE: ${jewelrySize} (CRITICAL: Respect this scale)` : ''}
 
     Assignment:
-    Create a hyper-realistic, 2K resolution commercial photograph of this jewelry item based on the following direction:
+    Create a hyper-realistic commercial photograph of this jewelry item based on the following direction:
     "${scenarioPrompt}"
 
     Technical Requirements:
@@ -142,19 +143,31 @@ export const generateJewelryRendition = async (
 
   parts.push({ text: fullPrompt });
 
+  // Model Selection Strategy:
+  // Use gemini-2.5-flash-image (Nano Banana) for standard product shots.
+  // Use gemini-3-pro-image-preview (Nano Banana Pro) for model shots (Human elements require higher fidelity).
+  const modelName = isModelShot ? "gemini-3-pro-image-preview" : "gemini-2.5-flash-image";
+
+  // Config Strategy:
+  // Flash Image does not support 'imageSize'.
+  // Pro Image supports 'imageSize' (2K).
+  const imageConfig: any = {
+    aspectRatio: '1:1',
+  };
+
+  if (isModelShot) {
+    imageConfig.imageSize = '2K';
+  }
+
   return retryWithBackoff(async () => {
     try {
-      // Using gemini-3-pro-image-preview (Nano Banana Pro) for high quality 2K images
       const response = await ai.models.generateContent({
-        model: "gemini-3-pro-image-preview",
+        model: modelName,
         contents: {
           parts: parts
         },
         config: {
-          imageConfig: {
-            imageSize: '2K', // Explicitly request 2K resolution
-            aspectRatio: '1:1'
-          }
+          imageConfig: imageConfig
         }
       });
 
@@ -166,7 +179,7 @@ export const generateJewelryRendition = async (
       }
       throw new Error("No image data in response");
     } catch (error) {
-      console.error("Generation error inside retry block:", error);
+      console.error(`Generation error inside retry block (${modelName}):`, error);
       throw error;
     }
   });
@@ -186,18 +199,20 @@ export const editGeneratedImage = async (
     "${editPrompt}"
 
     Requirements:
-    - Maintain the photo-realistic 2K quality.
+    - Maintain the photo-realistic quality.
     - Keep the core jewelry item intact unless asked to modify it.
     - Apply lighting, background, or stylistic changes as requested.
     
     Output:
-    The edited image in high resolution.
+    The edited image.
   `;
 
   return retryWithBackoff(async () => {
     try {
+      // Using Flash for edits to align with "Nano Banana for most generations"
+      // gemini-2.5-flash-image generates 1K images which is standard.
       const response = await ai.models.generateContent({
-        model: "gemini-3-pro-image-preview",
+        model: "gemini-2.5-flash-image",
         contents: {
           parts: [
             { 
@@ -211,7 +226,7 @@ export const editGeneratedImage = async (
         },
         config: {
           imageConfig: {
-            imageSize: '2K',
+            // Flash does not support imageSize config, it defaults to 1024x1024
             aspectRatio: '1:1'
           }
         }

@@ -53,7 +53,7 @@ const ScenarioCard: React.FC<ScenarioCardProps> = ({ item, onDownload, onEdit })
             {/* Overlay Actions */}
             <div className={`absolute inset-0 bg-black/30 transition-opacity duration-300 flex items-center justify-center gap-2 ${isEditing ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}>
                <button 
-                 onClick={() => onDownload(item.url, `luxelens-${item.scenario.replace(/\s+/g, '-').toLowerCase()}.png`)}
+                 onClick={() => onDownload(item.url, `miomorfia-${item.scenario.replace(/\s+/g, '-').toLowerCase()}.png`)}
                  className="bg-white text-stone-900 px-4 py-2 rounded-full text-xs md:text-sm font-semibold shadow-lg hover:bg-stone-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300"
                >
                  Download
