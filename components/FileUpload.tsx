@@ -6,9 +6,10 @@ interface FileUploadProps {
   onChange: (file: File | null, preview: string | null) => void;
   preview: string | null;
   id: string;
+  onCropClick?: () => void;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ label, accept = "image/*", onChange, preview, id }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ label, accept = "image/*", onChange, preview, id, onCropClick }) => {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -32,16 +33,31 @@ const FileUpload: React.FC<FileUploadProps> = ({ label, accept = "image/*", onCh
             <div className="absolute top-2 left-2 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full opacity-80">
               Loaded
             </div>
-            <button 
-              onClick={(e) => {
-                e.preventDefault();
-                onChange(null, null);
-              }}
-              className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-              title="Remove image"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
+            
+            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {onCropClick && (
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onCropClick();
+                  }}
+                  className="bg-white text-stone-700 p-1.5 rounded-full shadow-md hover:text-amber-600 transition-colors"
+                  title="Crop image"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/><path d="M4 5l7 7m0-7l-7 7"/></svg>
+                </button>
+              )}
+              <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  onChange(null, null);
+                }}
+                className="bg-red-500 text-white p-1.5 rounded-full shadow-md hover:bg-red-600 transition-colors"
+                title="Remove image"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
           </div>
         ) : (
           <label htmlFor={id} className="flex flex-col items-center justify-center w-full h-full cursor-pointer p-2 text-center">

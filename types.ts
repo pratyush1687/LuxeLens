@@ -5,6 +5,7 @@ export enum AppState {
   GENERATING = 'GENERATING',
   RESULTS = 'RESULTS',
   HISTORY = 'HISTORY',
+  TRY_ON = 'TRY_ON',
 }
 
 export interface JewelryAnalysis {

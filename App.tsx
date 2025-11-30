@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AppState, JewelryAnalysis, GeneratedImage, Project } from './types';
 import FileUpload from './components/FileUpload';
 import ScenarioCard from './components/ScenarioCard';
-import { analyzeJewelryImage, generateJewelryRendition, editGeneratedImage } from './services/geminiService';
+import CropModal from './components/CropModal';
+import { analyzeJewelryImage, generateJewelryRendition, editGeneratedImage, generateVirtualTryOn } from './services/geminiService';
 import { saveProjectToHistory, getProjectHistory, deleteProjectFromHistory, savePreferredLogo, getPreferredLogo } from './services/dbService';
 
 // Mi OMORFIA Branding Component
@@ -39,6 +40,17 @@ const App: React.FC = () => {
   const [jewelryFile, setJewelryFile] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<string | null>(null);
   const [jewelrySize, setJewelrySize] = useState<string>('');
+  
+  // Try-On State
+  const [userModelFile, setUserModelFile] = useState<string | null>(null);
+  const [tryOnResult, setTryOnResult] = useState<string | null>(null);
+  const [isTryOnLoading, setIsTryOnLoading] = useState(false);
+
+  // Crop State
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropTarget, setCropTarget] = useState<'jewelry' | 'model' | null>(null);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+
   const [analysis, setAnalysis] = useState<JewelryAnalysis | null>(null);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -284,6 +296,50 @@ const App: React.FC = () => {
     }
   };
 
+  // --- Crop Handlers ---
+  const initiateCrop = (target: 'jewelry' | 'model') => {
+    if (target === 'jewelry' && jewelryFile) {
+      setImageToCrop(jewelryFile);
+      setCropTarget('jewelry');
+      setCropModalOpen(true);
+    } else if (target === 'model' && userModelFile) {
+      setImageToCrop(userModelFile);
+      setCropTarget('model');
+      setCropModalOpen(true);
+    }
+  };
+
+  const handleCropComplete = (croppedBase64: string) => {
+    if (cropTarget === 'jewelry') {
+      setJewelryFile(croppedBase64);
+    } else if (cropTarget === 'model') {
+      setUserModelFile(croppedBase64);
+    }
+    // Close modal handled by component or here? Component handles UI close call, we reset state
+    // But modal needs explicit close prop action
+    // We update the file state, so the UI will reflect the cropped version
+  };
+
+  const handleTryOnGeneration = async () => {
+    if (!jewelryFile || !userModelFile) return;
+    
+    setIsTryOnLoading(true);
+    setTryOnResult(null);
+    setError(null);
+
+    try {
+      // Use existing analysis if available, otherwise default to "jewelry"
+      const category = analysis?.category || "jewelry item";
+      const resultUrl = await generateVirtualTryOn(jewelryFile, userModelFile, category);
+      setTryOnResult(resultUrl);
+    } catch (e: any) {
+      console.error("Try-on failed", e);
+      setError("Failed to generate Virtual Try-On. Please ensure both images are clear.");
+    } finally {
+      setIsTryOnLoading(false);
+    }
+  };
+
   const handleDownload = (url: string, filename: string) => {
     const link = document.createElement('a');
     link.href = url;
@@ -341,6 +397,8 @@ const App: React.FC = () => {
     setCurrentProjectId(null);
     setGeneratedImages([]);
     setAnalysis(null);
+    setTryOnResult(null);
+    setUserModelFile(null);
   };
 
   // --- RENDER HELPERS ---
@@ -386,6 +444,14 @@ const App: React.FC = () => {
           {/* Nav Actions */}
           <div className="flex items-center gap-4">
             <button 
+              onClick={() => setAppState(AppState.TRY_ON)}
+              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${appState === AppState.TRY_ON ? 'text-amber-600' : 'text-stone-600 hover:text-stone-900'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span className="hidden sm:inline">Virtual Try-On</span>
+            </button>
+            <div className="w-px h-6 bg-stone-300"></div>
+            <button 
               onClick={loadHistory}
               className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${appState === AppState.HISTORY ? 'text-amber-600' : 'text-stone-600 hover:text-stone-900'}`}
             >
@@ -408,7 +474,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Upload View */}
+        {/* Upload View (Studio) */}
         {appState === AppState.UPLOAD && (
           <div className="flex-1 overflow-y-auto flex flex-col justify-center py-4 px-4 sm:px-6 lg:px-8 custom-scrollbar">
             <div className="max-w-3xl mx-auto animate-fade-in w-full min-h-[calc(100vh-8rem)] flex flex-col justify-center">
@@ -468,6 +534,94 @@ const App: React.FC = () => {
                   <span>Generate Assets</span>
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H5"/><path d="M21 16h-2"/><path d="M16 19h2"/></svg>
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Virtual Try-On View */}
+        {appState === AppState.TRY_ON && (
+          <div className="flex-1 overflow-y-auto flex flex-col justify-center py-4 px-4 sm:px-6 lg:px-8 custom-scrollbar">
+            <div className="max-w-4xl mx-auto animate-fade-in w-full min-h-[calc(100vh-8rem)]">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl md:text-4xl font-serif font-bold text-stone-900 mb-2">Virtual Try-On</h2>
+                <p className="text-stone-600">See how it looks instantly. Upload the jewelry and a photo of yourself.</p>
+              </div>
+
+              <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border border-stone-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  {/* Inputs */}
+                  <div className="flex flex-col gap-6">
+                    <FileUpload 
+                      id="jewelry-tryon-upload"
+                      label="1. Jewelry Item" 
+                      preview={jewelryFile} 
+                      onChange={(_, base64) => setJewelryFile(base64)}
+                      onCropClick={() => initiateCrop('jewelry')}
+                    />
+                    <FileUpload 
+                      id="user-tryon-upload"
+                      label="2. Your Photo" 
+                      preview={userModelFile} 
+                      onChange={(_, base64) => setUserModelFile(base64)}
+                      onCropClick={() => initiateCrop('model')}
+                    />
+                    
+                    <button
+                      onClick={handleTryOnGeneration}
+                      disabled={!jewelryFile || !userModelFile || isTryOnLoading}
+                      className={`w-full py-3 rounded-xl font-bold text-sm md:text-lg shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 mt-auto ${
+                        !jewelryFile || !userModelFile || isTryOnLoading
+                          ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                          : 'bg-stone-900 text-white hover:bg-stone-800 hover:shadow-xl'
+                      }`}
+                    >
+                      {isTryOnLoading ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Visualize It</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Output */}
+                  <div className="h-full min-h-[300px] bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-center relative overflow-hidden">
+                    {tryOnResult ? (
+                      <>
+                        <img src={tryOnResult} alt="Try-On Result" className="w-full h-full object-contain" />
+                        <div className="absolute bottom-4 right-4 flex gap-2">
+                           <button 
+                             onClick={() => handleDownload(tryOnResult, 'miomorfia-tryon.png')}
+                             className="bg-white text-stone-900 px-4 py-2 rounded-full text-sm font-semibold shadow-lg hover:bg-stone-100 flex items-center gap-2"
+                           >
+                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                             Download
+                           </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center p-6 text-stone-400">
+                        {isTryOnLoading ? (
+                          <div className="flex flex-col items-center">
+                             <div className="w-12 h-12 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin mb-4"></div>
+                             <p>Fitting jewelry...</p>
+                          </div>
+                        ) : (
+                          <>
+                             <svg className="w-16 h-16 mx-auto mb-3 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                             <p>Result will appear here</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -607,6 +761,19 @@ const App: React.FC = () => {
         )}
 
       </main>
+
+      {/* Global Crop Modal */}
+      {cropModalOpen && imageToCrop && (
+        <CropModal 
+          isOpen={cropModalOpen}
+          imageSrc={imageToCrop}
+          onClose={() => {
+            setCropModalOpen(false);
+            setImageToCrop(null);
+          }}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 };

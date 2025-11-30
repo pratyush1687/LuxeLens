@@ -244,3 +244,72 @@ export const editGeneratedImage = async (
     }
   });
 };
+
+export const generateVirtualTryOn = async (
+  jewelryBase64: string,
+  modelBase64: string,
+  categoryHint: string = "jewelry"
+): Promise<string> => {
+  const ai = getClient();
+
+  // Prompt for Nano Banana (Flash Image)
+  const prompt = `
+    You are a virtual try-on expert.
+    
+    Input 1: A photo of a piece of jewelry (${categoryHint}).
+    Input 2: A photo of a person.
+    
+    Task:
+    Generate a photo-realistic image of the person from Input 2 wearing the jewelry from Input 1.
+    
+    Rules:
+    1. Identify the correct placement of the ${categoryHint} (e.g., ring on finger, necklace on neck, earring on ear).
+    2. Maintain the identity, skin tone, and pose of the person exactly.
+    3. Maintain the design, material, and gem details of the jewelry exactly.
+    4. Ensure realistic lighting, shadows, and perspective (how the jewelry sits on the skin).
+    5. If the jewelry is large/small, scale it realistically to the person's body proportions.
+    
+    Return only the final composited image.
+  `;
+
+  return retryWithBackoff(async () => {
+    try {
+      // Nano Banana (Flash Image) is requested for Try-On
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: {
+          parts: [
+            { 
+              inlineData: { 
+                mimeType: getMimeType(jewelryBase64), 
+                data: stripBase64Prefix(jewelryBase64) 
+              } 
+            },
+            { 
+              inlineData: { 
+                mimeType: getMimeType(modelBase64), 
+                data: stripBase64Prefix(modelBase64) 
+              } 
+            },
+            { text: prompt }
+          ]
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: '1:1'
+          }
+        }
+      });
+
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+      throw new Error("No image data in response");
+    } catch (error) {
+      console.error("Try-on generation error:", error);
+      throw error;
+    }
+  });
+};
